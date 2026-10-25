@@ -5,7 +5,7 @@
     <RootNamespace>AllGunEvo</RootNamespace>
     <LangVersion>latest</LangVersion>
     <!-- Keep in sync with AllGunEvoApi.Version (the BepInPlugin attribute needs a const). -->
-    <Version>2.1.0</Version>
+    <Version>2.2.0</Version>
     <Deterministic>true</Deterministic>
     <DebugType>none</DebugType>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>

@@ -21,6 +21,8 @@ public sealed class AllGunEvoPlugin : BaseUnityPlugin
     internal static ConfigEntry<int> VSync;
     internal static ConfigEntry<int> TargetFrameRate;
     internal static ConfigEntry<int> MaxQueuedFrames;
+    internal static ConfigEntry<bool> SoftLimitToRefresh;
+    internal static ConfigEntry<int> SoftLimitOffset;
     internal static ConfigEntry<bool> Verbose;
 
     private void Awake()
@@ -61,6 +63,8 @@ public sealed class AllGunEvoPlugin : BaseUnityPlugin
         VSync.SettingChanged += OnDisplaySettingChanged;
         TargetFrameRate.SettingChanged += OnDisplaySettingChanged;
         MaxQueuedFrames.SettingChanged += OnDisplaySettingChanged;
+        SoftLimitToRefresh.SettingChanged += OnDisplaySettingChanged;
+        SoftLimitOffset.SettingChanged += OnDisplaySettingChanged;
     }
 
     private static void OnDisplaySettingChanged(object sender, EventArgs e)
@@ -81,12 +85,18 @@ public sealed class AllGunEvoPlugin : BaseUnityPlugin
         DisplayEnabled = Config.Bind("Display", "Enabled", true,
             "Apply the frame pacing settings below. Disable to leave the game untouched.");
         VSync = Config.Bind("Display", "VSyncCount", 1,
-            "0 = off (lowest latency, tearing). 1 = follow monitor refresh. 2-4 = every Nth refresh.");
+            "0 = off (lowest latency, tearing). 1 = follow monitor refresh. 2-4 = every Nth refresh. " +
+            "Ignored while SoftLimitToRefresh is on, because Unity ignores targetFrameRate when vSync is on.");
         TargetFrameRate = Config.Bind("Display", "TargetFrameRate", -1,
-            "-1 = unlimited. Unity ignores this whenever VSyncCount is not 0.");
+            "-1 = unlimited. Ignored while SoftLimitToRefresh is on or vSync is on.");
         MaxQueuedFrames = Config.Bind("Display", "MaxQueuedFrames", 3,
             "Render queue depth, the Unity-native analogue of Reflex low-latency mode. 1 = lowest latency, 3 = Unity default.");
+        SoftLimitToRefresh = Config.Bind("Display", "SoftLimitToRefresh", true,
+            "Cap the frame rate at (monitor refresh - SoftLimitOffset) and force vSyncCount to 0. " +
+            "Use this when the engine refuses to present-sync; every frame still lands inside one refresh window.");
+        SoftLimitOffset = Config.Bind("Display", "SoftLimitOffset", 3,
+            "How many fps below the monitor refresh the soft limit sits.");
         Verbose = Config.Bind("Display", "Verbose", false,
-            "Log live frame pacing values every second (diagnostics).");
+            "Log live frame pacing values and measured fps once per second (diagnostics).");
     }
 }

@@ -107,8 +107,13 @@ public sealed class VacuumSchedule
 }
 
 /// <summary>
-/// Pure comparison between configured and live frame pacing values. The per-frame path
-/// (<see cref="ShouldReapply"/>) works on raw ints so it allocates nothing.
+/// Pure frame pacing policy. Every method works on raw ints so the per-frame path allocates nothing.
+///
+/// Soft limit: vSync is the only true presentation sync, but Unity ignores targetFrameRate whenever
+/// vSyncCount != 0, and a vSync write only takes effect when the swap chain is rebuilt. When the
+/// engine refuses to present-sync, capping a few frames under the refresh rate is the next best
+/// thing: every frame still lands inside one refresh window, so pacing stays even without tearing
+/// at the awkward "exactly refresh rate" boundary.
 /// </summary>
 public static class DisplayPolicy
 {
@@ -116,6 +121,7 @@ public static class DisplayPolicy
     public const int MaxVSyncCount = 4;
     public const int MinQueuedFrames = 1;
     public const int MaxQueuedFrames = 3;
+    public const int MinFrameRate = 1;
 
     public static int NormalizeVSyncCount(int value) => Clamp(value, MinVSyncCount, MaxVSyncCount);
 
@@ -123,35 +129,59 @@ public static class DisplayPolicy
 
     public static int NormalizeQueuedFrames(int value) => Clamp(value, MinQueuedFrames, MaxQueuedFrames);
 
+    /// <summary>Effective vSync value: the soft limit needs targetFrameRate, so it forces vSync off.</summary>
+    public static int ComputeVSyncCount(DisplaySettings wanted)
+    {
+        if (wanted == null) return 0;
+        if (wanted.SoftLimitToRefresh) return 0;
+        return NormalizeVSyncCount(wanted.VSyncCount);
+    }
+
+    /// <summary>Effective frame-rate cap; refreshRate &lt;= 0 means the engine could not report one.</summary>
+    public static int ComputeTargetFrameRate(DisplaySettings wanted, int refreshRate)
+    {
+        if (wanted == null) return -1;
+
+        if (wanted.SoftLimitToRefresh && refreshRate > 0)
+        {
+            int offset = wanted.SoftLimitOffset < 0 ? 0 : wanted.SoftLimitOffset;
+            return Math.Max(MinFrameRate, refreshRate - offset);
+        }
+
+        return NormalizeFrameRate(wanted.TargetFrameRate);
+    }
+
     /// <summary>Materialises a normalised copy; only the write path uses it (low frequency).</summary>
-    public static DisplaySettings Normalize(DisplaySettings wanted)
+    public static DisplaySettings Normalize(DisplaySettings wanted, int refreshRate)
     {
         if (wanted == null) return new DisplaySettings { Enabled = false };
 
         return new DisplaySettings
         {
             Enabled = wanted.Enabled,
-            VSyncCount = NormalizeVSyncCount(wanted.VSyncCount),
-            TargetFrameRate = NormalizeFrameRate(wanted.TargetFrameRate),
-            MaxQueuedFrames = NormalizeQueuedFrames(wanted.MaxQueuedFrames)
+            VSyncCount = ComputeVSyncCount(wanted),
+            TargetFrameRate = ComputeTargetFrameRate(wanted, refreshRate),
+            MaxQueuedFrames = NormalizeQueuedFrames(wanted.MaxQueuedFrames),
+            SoftLimitToRefresh = wanted.SoftLimitToRefresh,
+            SoftLimitOffset = wanted.SoftLimitOffset
         };
     }
 
-    public static bool ShouldReapply(DisplaySettings wanted, DisplayState actual)
+    public static bool ShouldReapply(DisplaySettings wanted, DisplayState actual, int refreshRate)
     {
         if (wanted == null || !wanted.Enabled) return false;
 
-        return actual.VSyncCount != NormalizeVSyncCount(wanted.VSyncCount)
-            || actual.TargetFrameRate != NormalizeFrameRate(wanted.TargetFrameRate)
+        return actual.VSyncCount != ComputeVSyncCount(wanted)
+            || actual.TargetFrameRate != ComputeTargetFrameRate(wanted, refreshRate)
             || actual.MaxQueuedFrames != NormalizeQueuedFrames(wanted.MaxQueuedFrames);
     }
 
-    public static string Describe(DisplaySettings wanted, DisplayState actual)
+    public static string Describe(DisplaySettings wanted, DisplayState actual, int refreshRate)
     {
         if (wanted == null) return string.Empty;
 
-        int wantedVSync = NormalizeVSyncCount(wanted.VSyncCount);
-        int wantedFrameRate = NormalizeFrameRate(wanted.TargetFrameRate);
+        int wantedVSync = ComputeVSyncCount(wanted);
+        int wantedFrameRate = ComputeTargetFrameRate(wanted, refreshRate);
         int wantedQueued = NormalizeQueuedFrames(wanted.MaxQueuedFrames);
 
         string drift = string.Empty;
@@ -159,6 +189,13 @@ public static class DisplayPolicy
         if (actual.TargetFrameRate != wantedFrameRate) drift += " fps " + actual.TargetFrameRate + "->" + wantedFrameRate;
         if (actual.MaxQueuedFrames != wantedQueued) drift += " queue " + actual.MaxQueuedFrames + "->" + wantedQueued;
         return drift.Trim();
+    }
+
+    public static string DescribeSoftLimit(DisplaySettings wanted, int refreshRate)
+    {
+        if (wanted == null || !wanted.SoftLimitToRefresh) return string.Empty;
+        return "soft limit " + refreshRate + "-" + wanted.SoftLimitOffset +
+            " = " + ComputeTargetFrameRate(wanted, refreshRate) + "fps";
     }
 
     private static int Clamp(int value, int min, int max)

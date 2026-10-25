@@ -72,8 +72,8 @@ public sealed class VacuumFeature : IAllGunEvoFeature
 }
 
 /// <summary>
-/// Keeps the engine's global frame pacing in line with the configured values, and (when verbose)
-/// reports the measured frame rate so a player can prove whether vSync actually took effect.
+/// Keeps the engine's frame pacing in line with the configured values, and (when verbose) reports
+/// the measured frame rate so the player can prove whether the cap really took effect.
 /// </summary>
 public sealed class DisplayFeature : IAllGunEvoFeature
 {
@@ -105,11 +105,12 @@ public sealed class DisplayFeature : IAllGunEvoFeature
         DisplaySettings wanted = settings.Display;
         if (wanted == null || !wanted.Enabled) return;
 
+        int refreshRate = gateway.RefreshRate;
         DisplayState actual = gateway.Read();
-        if (DisplayPolicy.ShouldReapply(wanted, actual))
+        if (DisplayPolicy.ShouldReapply(wanted, actual, refreshRate))
         {
-            // Warning level: BepInEx ship configs usually filter Info out of the disk log.
-            log?.Warn("display drift detected: " + DisplayPolicy.Describe(wanted, actual));
+            // Warning level: shipped BepInEx configs usually filter Info out of the disk log.
+            log?.Warn("display drift detected: " + DisplayPolicy.Describe(wanted, actual, refreshRate));
             ForceApply("drift corrected");
             return;
         }
@@ -130,7 +131,8 @@ public sealed class DisplayFeature : IAllGunEvoFeature
             " frames=" + frames +
             " vSync=" + actual.VSyncCount +
             " targetFrameRate=" + actual.TargetFrameRate +
-            " maxQueuedFrames=" + actual.MaxQueuedFrames);
+            " maxQueuedFrames=" + actual.MaxQueuedFrames +
+            " refresh=" + refreshRate + "Hz");
     }
 
     /// <summary>Applies unconditionally; used for startup, config changes, scene loads and drift repair.</summary>
@@ -139,11 +141,15 @@ public sealed class DisplayFeature : IAllGunEvoFeature
         DisplaySettings wanted = settings.Display;
         if (wanted == null || !wanted.Enabled) return;
 
-        gateway.Write(DisplayPolicy.Normalize(wanted));
+        int refreshRate = gateway.RefreshRate;
+        gateway.Write(DisplayPolicy.Normalize(wanted, refreshRate));
 
         DisplayState actual = gateway.Read();
+        string softLimit = DisplayPolicy.DescribeSoftLimit(wanted, refreshRate);
         log?.Info("display applied (" + reason + "): vSync=" + actual.VSyncCount +
             " targetFrameRate=" + actual.TargetFrameRate +
-            " maxQueuedFrames=" + actual.MaxQueuedFrames);
+            " maxQueuedFrames=" + actual.MaxQueuedFrames +
+            " refresh=" + refreshRate + "Hz" +
+            (softLimit.Length > 0 ? " [" + softLimit + "]" : string.Empty));
     }
 }

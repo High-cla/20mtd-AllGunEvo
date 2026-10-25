@@ -11,7 +11,7 @@ public static class AllGunEvoApi
     public const string PluginGuid = "local.20mtd.allgunevo";
 
     /// <summary>Single source of truth for the plugin version (also used by [BepInPlugin]).</summary>
-    public const string Version = "2.1.0";
+    public const string Version = "2.2.0";
 
     private static readonly FeatureRegistry registry = new FeatureRegistry();
 

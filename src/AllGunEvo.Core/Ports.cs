@@ -55,6 +55,9 @@ public readonly struct DisplayState
 /// <summary>Driven port: read/write the engine's global frame pacing state.</summary>
 public interface IDisplayGateway
 {
+    /// <summary>Monitor refresh rate in Hz, or 0 when the engine cannot report it.</summary>
+    int RefreshRate { get; }
+
     DisplayState Read();
     void Write(DisplaySettings settings);
 }

@@ -41,6 +41,7 @@ internal sealed class FakeVacuumGateway : IVacuumGateway
 
 internal sealed class FakeDisplayGateway : IDisplayGateway
 {
+    public int RefreshRate { get; set; } = 60;
     public DisplayState State { get; set; } = new DisplayState(3, 60, 2);
     public List<DisplaySettings> Writes { get; } = new List<DisplaySettings>();
 

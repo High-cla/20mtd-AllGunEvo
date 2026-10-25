@@ -21,12 +21,14 @@ internal sealed class UnityLogPort : ILogPort
 
 /// <summary>
 /// Writes the frame pacing values. Unity only applies vSyncCount to a freshly built swap chain,
-/// so a vSync change also rebuilds it through Screen.SetResolution (same call the game's own
+/// so a vSync change also rebuilds it through Screen.SetResolution (the same call the game's own
 /// options menu uses) — guarded so it happens once per change, not per frame.
 /// </summary>
 internal sealed class QualitySettingsGateway : IDisplayGateway
 {
     private bool swapChainRebuilt;
+
+    public int RefreshRate => Screen.currentResolution.refreshRate;
 
     public DisplayState Read()
     {
@@ -103,6 +105,8 @@ internal sealed class ConfigSettingsProvider : ISettingsProvider
             display.VSyncCount = AllGunEvoPlugin.VSync.Value;
             display.TargetFrameRate = AllGunEvoPlugin.TargetFrameRate.Value;
             display.MaxQueuedFrames = AllGunEvoPlugin.MaxQueuedFrames.Value;
+            display.SoftLimitToRefresh = AllGunEvoPlugin.SoftLimitToRefresh.Value;
+            display.SoftLimitOffset = AllGunEvoPlugin.SoftLimitOffset.Value;
             return display;
         }
     }

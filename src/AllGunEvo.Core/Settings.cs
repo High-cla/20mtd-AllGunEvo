@@ -18,4 +18,10 @@ public sealed class DisplaySettings
     public int VSyncCount { get; set; } = 1;
     public int TargetFrameRate { get; set; } = -1;
     public int MaxQueuedFrames { get; set; } = 3;
+
+    /// <summary>Cap the frame rate slightly under the monitor refresh rate instead of relying on vSync.</summary>
+    public bool SoftLimitToRefresh { get; set; }
+
+    /// <summary>How far under the refresh rate the soft limit sits. A small gap keeps frame pacing steady.</summary>
+    public int SoftLimitOffset { get; set; } = 3;
 }
