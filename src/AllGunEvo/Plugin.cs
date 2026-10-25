@@ -3,18 +3,15 @@ using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
-using AllGunEvo.Features;
-using AllGunEvo.Support;
+using AllGunEvo.Adapters;
+using AllGunEvo.Core;
 
 namespace AllGunEvo;
 
-[BepInPlugin(Guid, "All Gun Evolutions + XP Vacuum + Display", Version)]
+[BepInPlugin(AllGunEvoApi.PluginGuid, "All Gun Evolutions + XP Vacuum + Display", AllGunEvoApi.Version)]
 public sealed class AllGunEvoPlugin : BaseUnityPlugin
 {
-    public const string Guid = "local.20mtd.allgunevo";
-    public const string Version = "1.2.0";
-
-    internal static ManualLogSource Log;
+    internal static ManualLogSource LogSource;
 
     internal static ConfigEntry<bool> AllEvolutions;
     internal static ConfigEntry<bool> VacuumEnabled;
@@ -28,19 +25,22 @@ public sealed class AllGunEvoPlugin : BaseUnityPlugin
 
     private void Awake()
     {
-        Log = Logger;
+        LogSource = Logger;
         BindConfig();
-        GameApi.Validate();
 
-        Harmony harmony = new Harmony(Guid);
-        Patch(harmony, typeof(GunEvolutionFeature));
-        Patch(harmony, typeof(OptionsResolutionPatch));
+        ILogPort log = new UnityLogPort(Logger);
+        GameApi.Validate(log);
 
-        gameObject.AddComponent<XpVacuumRunner>();
-        gameObject.AddComponent<DisplayRunner>();
-        DisplayTuning.Attach();
+        AdapterHost.Start(Logger);
 
-        Log.LogInfo("AllGunEvo " + Version + " loaded.");
+        Harmony harmony = new Harmony(AllGunEvoApi.PluginGuid);
+        Patch(harmony, typeof(RunStartedPatch));
+        Patch(harmony, typeof(SwapChainPatch));
+
+        gameObject.AddComponent<FrameRunner>();
+        SubscribeConfigChanges();
+
+        LogSource.LogInfo("AllGunEvo " + AllGunEvoApi.Version + " loaded with " + AllGunEvoApi.FeatureCount + " features.");
     }
 
     private static void Patch(Harmony harmony, Type patchClass)
@@ -51,8 +51,21 @@ public sealed class AllGunEvoPlugin : BaseUnityPlugin
         }
         catch (Exception e)
         {
-            Log.LogError("patch " + patchClass.Name + " failed: " + e);
+            LogSource.LogError("patch " + patchClass.Name + " failed: " + e);
         }
+    }
+
+    private void SubscribeConfigChanges()
+    {
+        DisplayEnabled.SettingChanged += OnDisplaySettingChanged;
+        VSync.SettingChanged += OnDisplaySettingChanged;
+        TargetFrameRate.SettingChanged += OnDisplaySettingChanged;
+        MaxQueuedFrames.SettingChanged += OnDisplaySettingChanged;
+    }
+
+    private static void OnDisplaySettingChanged(object sender, EventArgs e)
+    {
+        AdapterHost.Redisplay("config changed");
     }
 
     private void BindConfig()
@@ -74,6 +87,6 @@ public sealed class AllGunEvoPlugin : BaseUnityPlugin
         MaxQueuedFrames = Config.Bind("Display", "MaxQueuedFrames", 3,
             "Render queue depth, the Unity-native analogue of Reflex low-latency mode. 1 = lowest latency, 3 = Unity default.");
         Verbose = Config.Bind("Display", "Verbose", false,
-            "Log the live frame pacing values once per second (diagnostics).");
+            "Log live frame pacing values every second (diagnostics).");
     }
 }

@@ -4,7 +4,7 @@
     <AssemblyName>AllGunEvo</AssemblyName>
     <RootNamespace>AllGunEvo</RootNamespace>
     <LangVersion>latest</LangVersion>
-    <Version>1.0.0</Version>
+    <Version>2.0.0</Version>
     <Deterministic>true</Deterministic>
     <DebugType>none</DebugType>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -13,6 +13,9 @@
     <Managed>$(GameDir)/MinutesTillDawn_Data/Managed</Managed>
     <BepCore>C:/Users/11/AppData/Roaming/com.kesomannen.gale/20-minutes-till-dawn/profiles/Default/BepInEx/core</BepCore>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../AllGunEvo.Core/**/*.cs" LinkBase="Core" />
+  </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine"><HintPath>$(Managed)/UnityEngine.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="BepInEx"><HintPath>$(BepCore)/BepInEx.dll</HintPath><Private>false</Private></Reference>
