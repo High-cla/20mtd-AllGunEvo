@@ -1,3 +1,5 @@
+using System;
+
 namespace AllGunEvo.Core.Features;
 
 /// <summary>Grants every gun evolution once per run. Wraps EvolutionGrantPolicy.</summary>
@@ -69,7 +71,10 @@ public sealed class VacuumFeature : IAllGunEvoFeature
     }
 }
 
-/// <summary>Keeps the engine's global frame pacing in line with the configured values.</summary>
+/// <summary>
+/// Keeps the engine's global frame pacing in line with the configured values, and (when verbose)
+/// reports the measured frame rate so a player can prove whether vSync actually took effect.
+/// </summary>
 public sealed class DisplayFeature : IAllGunEvoFeature
 {
     public const float VerboseIntervalSeconds = 1f;
@@ -79,6 +84,7 @@ public sealed class DisplayFeature : IAllGunEvoFeature
     private readonly ILogPort log;
 
     private float verboseElapsed;
+    private int verboseFrames;
 
     public DisplayFeature(ISettingsProvider settings, IDisplayGateway gateway, ILogPort log)
     {
@@ -102,18 +108,27 @@ public sealed class DisplayFeature : IAllGunEvoFeature
         DisplayState actual = gateway.Read();
         if (DisplayPolicy.ShouldReapply(wanted, actual))
         {
-            log?.Info("display drift detected: " + DisplayPolicy.Describe(wanted, actual));
+            // Warning level: BepInEx ship configs usually filter Info out of the disk log.
+            log?.Warn("display drift detected: " + DisplayPolicy.Describe(wanted, actual));
             ForceApply("drift corrected");
             return;
         }
 
         if (!settings.VerboseLogging) return;
+        if (context.DeltaSeconds <= 0f) return;
 
-        verboseElapsed += context.DeltaSeconds > 0f ? context.DeltaSeconds : 0f;
+        verboseElapsed += context.DeltaSeconds;
+        verboseFrames++;
         if (verboseElapsed < VerboseIntervalSeconds) return;
 
+        double fps = verboseFrames / verboseElapsed;
+        int frames = verboseFrames;
         verboseElapsed = 0f;
-        log?.Info("display ok: vSync=" + actual.VSyncCount +
+        verboseFrames = 0;
+
+        log?.Warn("display live: fps=" + Math.Round(fps, 1) +
+            " frames=" + frames +
+            " vSync=" + actual.VSyncCount +
             " targetFrameRate=" + actual.TargetFrameRate +
             " maxQueuedFrames=" + actual.MaxQueuedFrames);
     }

@@ -156,7 +156,7 @@ public sealed class BuiltInFeatureTests
         feature.OnTick(new TickContext(1f, true));
 
         Assert.Single(gateway.Writes);
-        Assert.Contains(log.Infos, m => m.Contains("drift detected"));
+        Assert.Contains(log.Warnings, m => m.Contains("drift detected"));
         Assert.Equal(1, gateway.State.VSyncCount);
     }
 
@@ -181,14 +181,29 @@ public sealed class BuiltInFeatureTests
         var feature = new DisplayFeature(settings, gateway, log);
 
         feature.OnTick(new TickContext(0.5f, true));
-        Assert.Empty(log.Infos);
+        Assert.Empty(log.Warnings);
 
         feature.OnTick(new TickContext(0.6f, true));
-        Assert.Single(log.Infos);
-        Assert.Contains("display ok", log.Infos[0]);
+        Assert.Single(log.Warnings);
+        Assert.Contains("display live: fps=", log.Warnings[0]);
 
         feature.OnTick(new TickContext(0.5f, true));
-        Assert.Single(log.Infos);
+        Assert.Single(log.Warnings);
+    }
+
+    [Fact]
+    public void DisplayFeatureVerboseSkipsPausedFrames()
+    {
+        var settings = new FakeSettings { VerboseLogging = true };
+        var gateway = new FakeDisplayGateway { State = new DisplayState(1, -1, 3) };
+        var log = new FakeLog();
+        var feature = new DisplayFeature(settings, gateway, log);
+
+        for (int i = 0; i < 200; i++) feature.OnTick(new TickContext(0f, true));
+        Assert.Empty(log.Warnings);
+
+        feature.OnTick(new TickContext(1f, true));
+        Assert.Single(log.Warnings);
     }
 
     [Fact]
