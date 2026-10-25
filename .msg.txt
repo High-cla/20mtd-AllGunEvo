@@ -1,0 +1,12 @@
+fix(display): re-apply frame pacing after swap chain rebuild
+
+The game rebuilds its swap chain in flanne.UI/OptionsSetter (Refresh -> SetFullscreen /
+SetResolution -> Screen.SetResolution), and Unity resets QualitySettings.vSyncCount when
+the chain is rebuilt, so the vSync write issued from plugin Awake was silently undone
+before the title scene finished starting.
+
+- Postfix OptionsSetter.SetFullscreen / SetResolution and re-apply.
+- Re-apply on SceneManager.sceneLoaded.
+- Add a 1 Hz drift watchdog that restores the configured values when anything else
+  overwrites them, logging which of the three drifted.
+- Add Display.Verbose for live value logging.

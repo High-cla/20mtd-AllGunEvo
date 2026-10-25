@@ -12,7 +12,7 @@ namespace AllGunEvo;
 public sealed class AllGunEvoPlugin : BaseUnityPlugin
 {
     public const string Guid = "local.20mtd.allgunevo";
-    public const string Version = "1.1.0";
+    public const string Version = "1.2.0";
 
     internal static ManualLogSource Log;
 
@@ -24,6 +24,7 @@ public sealed class AllGunEvoPlugin : BaseUnityPlugin
     internal static ConfigEntry<int> VSync;
     internal static ConfigEntry<int> TargetFrameRate;
     internal static ConfigEntry<int> MaxQueuedFrames;
+    internal static ConfigEntry<bool> Verbose;
 
     private void Awake()
     {
@@ -33,8 +34,10 @@ public sealed class AllGunEvoPlugin : BaseUnityPlugin
 
         Harmony harmony = new Harmony(Guid);
         Patch(harmony, typeof(GunEvolutionFeature));
+        Patch(harmony, typeof(OptionsResolutionPatch));
 
         gameObject.AddComponent<XpVacuumRunner>();
+        gameObject.AddComponent<DisplayRunner>();
         DisplayTuning.Attach();
 
         Log.LogInfo("AllGunEvo " + Version + " loaded.");
@@ -65,10 +68,12 @@ public sealed class AllGunEvoPlugin : BaseUnityPlugin
         DisplayEnabled = Config.Bind("Display", "Enabled", true,
             "Apply the frame pacing settings below. Disable to leave the game untouched.");
         VSync = Config.Bind("Display", "VSyncCount", 1,
-            "0 = off (lowest latency, tearing). 1 = follow monitor refresh (stable). 2-4 = every Nth refresh.");
+            "0 = off (lowest latency, tearing). 1 = follow monitor refresh. 2-4 = every Nth refresh.");
         TargetFrameRate = Config.Bind("Display", "TargetFrameRate", -1,
-            "-1 = unlimited. Ignored by Unity whenever VSyncCount is not 0.");
+            "-1 = unlimited. Unity ignores this whenever VSyncCount is not 0.");
         MaxQueuedFrames = Config.Bind("Display", "MaxQueuedFrames", 3,
             "Render queue depth, the Unity-native analogue of Reflex low-latency mode. 1 = lowest latency, 3 = Unity default.");
+        Verbose = Config.Bind("Display", "Verbose", false,
+            "Log the live frame pacing values once per second (diagnostics).");
     }
 }
