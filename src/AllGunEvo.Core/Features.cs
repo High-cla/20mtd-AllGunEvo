@@ -1,5 +1,3 @@
-using AllGunEvo.Core;
-
 namespace AllGunEvo.Core.Features;
 
 /// <summary>Grants every gun evolution once per run. Wraps EvolutionGrantPolicy.</summary>
@@ -23,18 +21,15 @@ public sealed class EvolutionFeature : IAllGunEvoFeature
     public void OnRunStarted(RunContext context)
     {
         GrantResult result = policy.Apply(context.RunToken, settings.Evolution, gateway, log);
+        if (result.Outcome == GrantOutcome.Disabled) return;
 
-        switch (result.Outcome)
+        if (result.Outcome == GrantOutcome.AlreadyGranted)
         {
-            case GrantOutcome.Granted:
-                log?.Info("Applied " + result.Applied + "/" + result.Total + " evolutions for gun " + result.GunName + ".");
-                break;
-            case GrantOutcome.AlreadyGranted:
-                log?.Info("Evolutions already granted for this run; skipping.");
-                break;
-            case GrantOutcome.Disabled:
-                break;
+            log?.Info("Evolutions already granted for this run; skipping.");
+            return;
         }
+
+        log?.Info("Applied " + result.Applied + "/" + result.Total + " evolutions for gun " + result.GunName + ".");
     }
 
     public void OnTick(TickContext context)
@@ -77,9 +72,13 @@ public sealed class VacuumFeature : IAllGunEvoFeature
 /// <summary>Keeps the engine's global frame pacing in line with the configured values.</summary>
 public sealed class DisplayFeature : IAllGunEvoFeature
 {
+    public const float VerboseIntervalSeconds = 1f;
+
     private readonly ISettingsProvider settings;
     private readonly IDisplayGateway gateway;
     private readonly ILogPort log;
+
+    private float verboseElapsed;
 
     public DisplayFeature(ISettingsProvider settings, IDisplayGateway gateway, ILogPort log)
     {
@@ -101,20 +100,31 @@ public sealed class DisplayFeature : IAllGunEvoFeature
         if (wanted == null || !wanted.Enabled) return;
 
         DisplayState actual = gateway.Read();
-        if (!DisplayPolicy.ShouldReapply(wanted, actual)) return;
+        if (DisplayPolicy.ShouldReapply(wanted, actual))
+        {
+            log?.Info("display drift detected: " + DisplayPolicy.Describe(wanted, actual));
+            ForceApply("drift corrected");
+            return;
+        }
 
-        log?.Info("display drift detected: " + DisplayPolicy.Describe(wanted, actual));
-        ForceApply("drift corrected");
+        if (!settings.VerboseLogging) return;
+
+        verboseElapsed += context.DeltaSeconds > 0f ? context.DeltaSeconds : 0f;
+        if (verboseElapsed < VerboseIntervalSeconds) return;
+
+        verboseElapsed = 0f;
+        log?.Info("display ok: vSync=" + actual.VSyncCount +
+            " targetFrameRate=" + actual.TargetFrameRate +
+            " maxQueuedFrames=" + actual.MaxQueuedFrames);
     }
 
-    /// <summary>Applies unconditionally; used for startup, config changes and scene loads.</summary>
+    /// <summary>Applies unconditionally; used for startup, config changes, scene loads and drift repair.</summary>
     public void ForceApply(string reason)
     {
         DisplaySettings wanted = settings.Display;
         if (wanted == null || !wanted.Enabled) return;
 
-        DisplaySettings normalized = DisplayPolicy.Normalize(wanted);
-        gateway.Write(normalized);
+        gateway.Write(DisplayPolicy.Normalize(wanted));
 
         DisplayState actual = gateway.Read();
         log?.Info("display applied (" + reason + "): vSync=" + actual.VSyncCount +

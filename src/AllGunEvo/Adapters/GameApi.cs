@@ -15,18 +15,28 @@ namespace AllGunEvo.Adapters;
 
 /// <summary>
 /// The single reflection point in the whole plugin. Implements the driven ports the core needs.
-/// Every Harmony string target and every AccessTools lookup lives here.
+/// Public game members are resolved with nameof (compile-time checked); private ones need literals,
+/// which are declared once as constants and reused by both AccessTools and [HarmonyPatch].
+/// Hot-path calls use cached delegates instead of MethodInfo.Invoke.
 /// </summary>
 internal sealed class GameApi : IEvolutionGateway, IVacuumGateway
 {
-    internal static readonly MethodInfo CombatEnter = AccessTools.Method(typeof(CombatState), "Enter");
-    internal static readonly MethodInfo EquipEvolution = AccessTools.Method(typeof(PlayerPerks), "Equip", new[] { typeof(GunEvolution) });
-    internal static readonly MethodInfo PickupCoroutine = AccessTools.Method(typeof(Pickup), "PickupCR");
-    internal static readonly FieldInfo PickupRoutineField = AccessTools.Field(typeof(Pickup), "pickUpCoroutine");
-    internal static readonly PropertyInfo CurrentState = AccessTools.Property(typeof(StateMachine), "CurrentState");
-    internal static readonly FieldInfo GunEvolutionsField = AccessTools.Field(typeof(GunData), "gunEvolutions");
-    internal static readonly MethodInfo SetFullscreen = AccessTools.Method(typeof(OptionsSetter), "SetFullscreen");
-    internal static readonly MethodInfo SetResolution = AccessTools.Method(typeof(OptionsSetter), "SetResolution");
+    internal const string SetFullscreenMethodName = "SetFullscreen";
+    internal const string SetResolutionMethodName = "SetResolution";
+
+    private const string PickupCoroutineMethodName = "PickupCR";
+    private const string PickupRoutineFieldName = "pickUpCoroutine";
+
+    internal static readonly MethodInfo CombatEnter = AccessTools.Method(typeof(CombatState), nameof(CombatState.Enter));
+    internal static readonly MethodInfo EquipEvolution = AccessTools.Method(typeof(PlayerPerks), nameof(PlayerPerks.Equip), new[] { typeof(GunEvolution) });
+    internal static readonly MethodInfo PickupCoroutine = AccessTools.Method(typeof(Pickup), PickupCoroutineMethodName);
+    internal static readonly FieldInfo PickupRoutineField = AccessTools.Field(typeof(Pickup), PickupRoutineFieldName);
+    internal static readonly FieldInfo GunEvolutionsField = AccessTools.Field(typeof(GunData), nameof(GunData.gunEvolutions));
+    internal static readonly MethodInfo SetFullscreen = AccessTools.Method(typeof(OptionsSetter), SetFullscreenMethodName);
+    internal static readonly MethodInfo SetResolution = AccessTools.Method(typeof(OptionsSetter), SetResolutionMethodName);
+
+    private static readonly Func<Pickup, GameObject, IEnumerator> PickupInvoker = CreatePickupInvoker();
+    private static readonly AccessTools.FieldRef<Pickup, IEnumerator> PickupRoutineRef = CreatePickupRoutineRef();
 
     private readonly ILogPort log;
     private PlayerController player;
@@ -37,29 +47,62 @@ internal sealed class GameApi : IEvolutionGateway, IVacuumGateway
         this.log = log;
     }
 
-    internal static bool Validate(ILogPort log)
+    private static Func<Pickup, GameObject, IEnumerator> CreatePickupInvoker()
     {
-        bool ok = true;
-        ok &= Check(CombatEnter, "CombatState.Enter", log);
-        ok &= Check(EquipEvolution, "PlayerPerks.Equip(GunEvolution)", log);
-        ok &= Check(PickupCoroutine, "Pickup.PickupCR", log);
-        ok &= Check(PickupRoutineField, "Pickup.pickUpCoroutine", log);
-        ok &= Check(CurrentState, "StateMachine.CurrentState", log);
-        ok &= Check(GunEvolutionsField, "GunData.gunEvolutions", log);
-        ok &= Check(SetFullscreen, "OptionsSetter.SetFullscreen", log);
-        ok &= Check(SetResolution, "OptionsSetter.SetResolution", log);
-        return ok;
+        if (PickupCoroutine == null) return null;
+        try
+        {
+            return (Func<Pickup, GameObject, IEnumerator>)Delegate.CreateDelegate(
+                typeof(Func<Pickup, GameObject, IEnumerator>), PickupCoroutine);
+        }
+        catch (Exception e)
+        {
+            logMissing("Pickup.PickupCR delegate bind failed: " + e);
+            return null;
+        }
     }
 
-    private static bool Check(MemberInfo member, string label, ILogPort log)
+    private static AccessTools.FieldRef<Pickup, IEnumerator> CreatePickupRoutineRef()
+    {
+        if (PickupRoutineField == null) return null;
+        try
+        {
+            return AccessTools.FieldRefAccess<Pickup, IEnumerator>(PickupRoutineFieldName);
+        }
+        catch (Exception e)
+        {
+            logMissing("Pickup.pickUpCoroutine field ref failed: " + e);
+            return null;
+        }
+    }
+
+    private static void logMissing(string message) => AllGunEvoPlugin.LogSource?.LogError(message);
+
+    internal static bool Validate(ILogPort log)
+    {
+        List<string> missing = new List<string>();
+        Check(CombatEnter, nameof(CombatState.Enter), log, missing);
+        Check(EquipEvolution, nameof(PlayerPerks.Equip), log, missing);
+        Check(PickupCoroutine, PickupCoroutineMethodName, log, missing);
+        Check(PickupRoutineField, PickupRoutineFieldName, log, missing);
+        Check(GunEvolutionsField, nameof(GunData.gunEvolutions), log, missing);
+        Check(SetFullscreen, SetFullscreenMethodName, log, missing);
+        Check(SetResolution, SetResolutionMethodName, log, missing);
+
+        if (missing.Count == 0) return true;
+
+        log?.Error("missing game members: " + string.Join(", ", missing.ToArray()));
+        return false;
+    }
+
+    private static void Check(MemberInfo member, string label, ILogPort log, List<string> missing)
     {
         if (member != null)
         {
             log?.Info("ok " + label);
-            return true;
+            return;
         }
-        log?.Error("missing game member: " + label);
-        return false;
+        missing.Add(label);
     }
 
     internal void BindRun(PlayerController controller)
@@ -110,14 +153,14 @@ internal sealed class GameApi : IEvolutionGateway, IVacuumGateway
         {
             XPPickup pickup = pickups[i];
             if (pickup == null || !pickup.isActiveAndEnabled) continue;
-            if (PickupRoutineField != null && PickupRoutineField.GetValue(pickup) != null) continue;
+            if (PickupRoutineRef != null && PickupRoutineRef(pickup) != null) continue;
 
-            if (PickupCoroutine != null)
+            if (PickupInvoker != null)
             {
-                IEnumerator routine = PickupCoroutine.Invoke(pickup, new object[] { pickupper }) as IEnumerator;
+                IEnumerator routine = PickupInvoker(pickup, pickupper);
                 if (routine != null)
                 {
-                    if (PickupRoutineField != null) PickupRoutineField.SetValue(pickup, routine);
+                    if (PickupRoutineRef != null) PickupRoutineRef(pickup) = routine;
                     pickup.StartCoroutine(routine);
                     collected++;
                     continue;
@@ -131,9 +174,9 @@ internal sealed class GameApi : IEvolutionGateway, IVacuumGateway
         return collected;
     }
 
+    /// <summary>CurrentState is a public virtual property, so no reflection is needed here.</summary>
     internal static bool IsCombat(GameController controller)
     {
-        if (controller == null || CurrentState == null) return false;
-        return CurrentState.GetValue(controller, null) is CombatState;
+        return controller != null && controller.CurrentState is CombatState;
     }
 }

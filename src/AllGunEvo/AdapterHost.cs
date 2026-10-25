@@ -12,6 +12,9 @@ namespace AllGunEvo;
 /// <summary>Composition root: builds the ports, registers the features, forwards engine events.</summary>
 internal static class AdapterHost
 {
+    /// <summary>Scene-wide lookups are expensive; retry at most once per second while the controller is missing.</summary>
+    private const float ControllerProbeSeconds = 1f;
+
     internal static ILogPort Log;
     internal static GameApi Api;
     internal static ISettingsProvider Settings;
@@ -19,6 +22,7 @@ internal static class AdapterHost
     internal static DisplayFeature Display;
 
     private static GameController controller;
+    private static float nextControllerProbe;
 
     internal static void Start(ManualLogSource source)
     {
@@ -44,8 +48,7 @@ internal static class AdapterHost
 
     internal static void OnUpdate(float deltaSeconds)
     {
-        bool inCombat = IsCombat();
-        Registry.RaiseTick(new TickContext(deltaSeconds, inCombat), Log);
+        Registry.RaiseTick(new TickContext(deltaSeconds, IsCombat()), Log);
     }
 
     internal static void Redisplay(string reason)
@@ -56,13 +59,20 @@ internal static class AdapterHost
     internal static void OnSceneLoaded(Scene scene)
     {
         controller = null;
+        nextControllerProbe = 0f;
         Api.BindRun(null);
         Redisplay("scene " + scene.name);
     }
 
     private static bool IsCombat()
     {
-        if (controller == null) controller = Object.FindObjectOfType<GameController>();
+        if (controller == null)
+        {
+            if (Time.unscaledTime < nextControllerProbe) return false;
+            nextControllerProbe = Time.unscaledTime + ControllerProbeSeconds;
+            controller = Object.FindObjectOfType<GameController>();
+        }
+
         return GameApi.IsCombat(controller);
     }
 }

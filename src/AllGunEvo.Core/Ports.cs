@@ -59,12 +59,15 @@ public interface IDisplayGateway
     void Write(DisplaySettings settings);
 }
 
-/// <summary>Driven port: settings values, re-read on every use so hot reload needs no plumbing.</summary>
+/// <summary>Driven port: settings values, re-read on every access so hot reload needs no plumbing.</summary>
 public interface ISettingsProvider
 {
     EvolutionSettings Evolution { get; }
     VacuumSettings Vacuum { get; }
     DisplaySettings Display { get; }
+
+    /// <summary>Diagnostic sink: log live display values once per second.</summary>
+    bool VerboseLogging { get; }
 }
 
 public sealed class NullLogPort : ILogPort

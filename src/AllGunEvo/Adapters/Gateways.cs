@@ -34,25 +34,46 @@ internal sealed class QualitySettingsGateway : IDisplayGateway
     }
 }
 
-/// <summary>Reads ConfigEntry values on demand, so hot reload needs no change notification.</summary>
+/// <summary>
+/// Reads ConfigEntry values into pre-allocated DTO instances, so the per-frame read path allocates
+/// nothing while still seeing hot-reloaded config values.
+/// </summary>
 internal sealed class ConfigSettingsProvider : ISettingsProvider
 {
-    public EvolutionSettings Evolution => new EvolutionSettings
-    {
-        Enabled = AllGunEvoPlugin.AllEvolutions.Value
-    };
+    private readonly EvolutionSettings evolution = new EvolutionSettings();
+    private readonly VacuumSettings vacuum = new VacuumSettings();
+    private readonly DisplaySettings display = new DisplaySettings();
 
-    public VacuumSettings Vacuum => new VacuumSettings
+    public EvolutionSettings Evolution
     {
-        Enabled = AllGunEvoPlugin.VacuumEnabled.Value,
-        IntervalSeconds = AllGunEvoPlugin.VacuumInterval.Value
-    };
+        get
+        {
+            evolution.Enabled = AllGunEvoPlugin.AllEvolutions.Value;
+            return evolution;
+        }
+    }
 
-    public DisplaySettings Display => new DisplaySettings
+    public VacuumSettings Vacuum
     {
-        Enabled = AllGunEvoPlugin.DisplayEnabled.Value,
-        VSyncCount = AllGunEvoPlugin.VSync.Value,
-        TargetFrameRate = AllGunEvoPlugin.TargetFrameRate.Value,
-        MaxQueuedFrames = AllGunEvoPlugin.MaxQueuedFrames.Value
-    };
+        get
+        {
+            vacuum.Enabled = AllGunEvoPlugin.VacuumEnabled.Value;
+            vacuum.IntervalSeconds = AllGunEvoPlugin.VacuumInterval.Value;
+            return vacuum;
+        }
+    }
+
+    public DisplaySettings Display
+    {
+        get
+        {
+            display.Enabled = AllGunEvoPlugin.DisplayEnabled.Value;
+            display.VSyncCount = AllGunEvoPlugin.VSync.Value;
+            display.TargetFrameRate = AllGunEvoPlugin.TargetFrameRate.Value;
+            display.MaxQueuedFrames = AllGunEvoPlugin.MaxQueuedFrames.Value;
+            return display;
+        }
+    }
+
+    public bool VerboseLogging => AllGunEvoPlugin.Verbose.Value;
 }

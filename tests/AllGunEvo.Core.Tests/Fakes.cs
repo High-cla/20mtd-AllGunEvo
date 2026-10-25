@@ -69,4 +69,5 @@ internal sealed class FakeSettings : ISettingsProvider
     public EvolutionSettings Evolution { get; set; } = new EvolutionSettings { Enabled = true };
     public VacuumSettings Vacuum { get; set; } = new VacuumSettings { Enabled = true, IntervalSeconds = 30f };
     public DisplaySettings Display { get; set; } = new DisplaySettings { Enabled = true, VSyncCount = 1, TargetFrameRate = -1, MaxQueuedFrames = 3 };
+    public bool VerboseLogging { get; set; }
 }

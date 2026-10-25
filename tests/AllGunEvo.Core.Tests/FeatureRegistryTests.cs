@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using AllGunEvo.Core;
 using AllGunEvo.Core.Features;
 using Xunit;
@@ -63,6 +64,21 @@ public sealed class FeatureRegistryTests
         var registry = new FeatureRegistry();
         Assert.False(registry.TryRegister(new CountingFeature { Id = "" }, new FakeLog()));
         Assert.Equal(0, registry.Count);
+    }
+
+    [Fact]
+    public void SnapshotIsReusedUntilRegistration()
+    {
+        var registry = new FeatureRegistry();
+        var log = new FakeLog();
+
+        registry.TryRegister(new CountingFeature { Id = "a" }, log);
+        IReadOnlyList<IAllGunEvoFeature> first = registry.Snapshot();
+        Assert.Same(first, registry.Snapshot());
+
+        registry.TryRegister(new CountingFeature { Id = "b" }, log);
+        Assert.NotSame(first, registry.Snapshot());
+        Assert.Equal(2, registry.Count);
     }
 
     [Fact]
@@ -154,5 +170,37 @@ public sealed class BuiltInFeatureTests
         feature.ForceApply("test");
 
         Assert.Single(gateway.Writes);
+    }
+
+    [Fact]
+    public void DisplayFeatureVerboseLogsAtMostOncePerSecond()
+    {
+        var settings = new FakeSettings { VerboseLogging = true };
+        var gateway = new FakeDisplayGateway { State = new DisplayState(1, -1, 3) };
+        var log = new FakeLog();
+        var feature = new DisplayFeature(settings, gateway, log);
+
+        feature.OnTick(new TickContext(0.5f, true));
+        Assert.Empty(log.Infos);
+
+        feature.OnTick(new TickContext(0.6f, true));
+        Assert.Single(log.Infos);
+        Assert.Contains("display ok", log.Infos[0]);
+
+        feature.OnTick(new TickContext(0.5f, true));
+        Assert.Single(log.Infos);
+    }
+
+    [Fact]
+    public void DisplayFeatureIgnoresTickWhenDisabled()
+    {
+        var settings = new FakeSettings();
+        settings.Display = new DisplaySettings { Enabled = false };
+        var gateway = new FakeDisplayGateway { State = new DisplayState(0, 60, 1) };
+        var feature = new DisplayFeature(settings, gateway, new FakeLog());
+
+        feature.OnTick(new TickContext(5f, true));
+
+        Assert.Empty(gateway.Writes);
     }
 }

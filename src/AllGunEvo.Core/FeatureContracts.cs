@@ -36,13 +36,18 @@ public interface IAllGunEvoFeature
     void OnTick(TickContext context);
 }
 
+/// <summary>
+/// Dispatch table. The feature array is rebuilt only on registration, so the per-frame dispatch
+/// path takes no allocation at all.
+/// </summary>
 public sealed class FeatureRegistry
 {
     private readonly List<IAllGunEvoFeature> features = new List<IAllGunEvoFeature>();
+    private IAllGunEvoFeature[] snapshot = Array.Empty<IAllGunEvoFeature>();
 
-    public IReadOnlyList<IAllGunEvoFeature> Snapshot() => features.ToArray();
+    public IReadOnlyList<IAllGunEvoFeature> Snapshot() => snapshot;
 
-    public int Count => features.Count;
+    public int Count => snapshot.Length;
 
     public bool TryRegister(IAllGunEvoFeature feature, ILogPort log)
     {
@@ -62,38 +67,39 @@ public sealed class FeatureRegistry
         }
 
         features.Add(feature);
+        snapshot = features.ToArray();
         log?.Info("feature registered: " + feature.Id);
         return true;
     }
 
     public void RaiseRunStarted(RunContext context, ILogPort log)
     {
-        IAllGunEvoFeature[] snapshot = features.ToArray();
-        for (int i = 0; i < snapshot.Length; i++)
+        IAllGunEvoFeature[] current = snapshot;
+        for (int i = 0; i < current.Length; i++)
         {
             try
             {
-                snapshot[i].OnRunStarted(context);
+                current[i].OnRunStarted(context);
             }
             catch (Exception e)
             {
-                log?.Error("feature " + snapshot[i].Id + " OnRunStarted failed: " + e.Message);
+                log?.Error("feature " + current[i].Id + " OnRunStarted failed: " + e);
             }
         }
     }
 
     public void RaiseTick(TickContext context, ILogPort log)
     {
-        IAllGunEvoFeature[] snapshot = features.ToArray();
-        for (int i = 0; i < snapshot.Length; i++)
+        IAllGunEvoFeature[] current = snapshot;
+        for (int i = 0; i < current.Length; i++)
         {
             try
             {
-                snapshot[i].OnTick(context);
+                current[i].OnTick(context);
             }
             catch (Exception e)
             {
-                log?.Error("feature " + snapshot[i].Id + " OnTick failed: " + e.Message);
+                log?.Error("feature " + current[i].Id + " OnTick failed: " + e);
             }
         }
     }

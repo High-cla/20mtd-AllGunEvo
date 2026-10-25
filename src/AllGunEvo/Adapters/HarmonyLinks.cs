@@ -8,7 +8,7 @@ using flanne.UI;
 namespace AllGunEvo.Adapters;
 
 /// <summary>Adapter only: extract the run token and hand it to the core. No decisions here.</summary>
-[HarmonyPatch(typeof(CombatState), "Enter")]
+[HarmonyPatch(typeof(CombatState), nameof(CombatState.Enter))]
 internal static class RunStartedPatch
 {
     [HarmonyPostfix]
@@ -26,14 +26,14 @@ internal static class RunStartedPatch
 internal static class SwapChainPatch
 {
     [HarmonyPostfix]
-    [HarmonyPatch(typeof(OptionsSetter), "SetFullscreen")]
+    [HarmonyPatch(typeof(OptionsSetter), GameApi.SetFullscreenMethodName)]
     private static void AfterFullscreen()
     {
         AdapterHost.Redisplay("options fullscreen");
     }
 
     [HarmonyPostfix]
-    [HarmonyPatch(typeof(OptionsSetter), "SetResolution")]
+    [HarmonyPatch(typeof(OptionsSetter), GameApi.SetResolutionMethodName)]
     private static void AfterResolution()
     {
         AdapterHost.Redisplay("options resolution");

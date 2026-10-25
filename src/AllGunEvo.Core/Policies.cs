@@ -59,7 +59,7 @@ public sealed class EvolutionGrantPolicy
             }
             catch (Exception e)
             {
-                log?.Error("evolution " + i + " (" + handle.Name + ") failed: " + e.Message);
+                log?.Error("evolution " + i + " (" + handle.Name + ") failed: " + e);
             }
         }
 
@@ -106,7 +106,10 @@ public sealed class VacuumSchedule
     public void Reset() => elapsed = 0f;
 }
 
-/// <summary>Pure comparison between configured and live frame pacing values.</summary>
+/// <summary>
+/// Pure comparison between configured and live frame pacing values. The per-frame path
+/// (<see cref="ShouldReapply"/>) works on raw ints so it allocates nothing.
+/// </summary>
 public static class DisplayPolicy
 {
     public const int MinVSyncCount = 0;
@@ -114,6 +117,13 @@ public static class DisplayPolicy
     public const int MinQueuedFrames = 1;
     public const int MaxQueuedFrames = 3;
 
+    public static int NormalizeVSyncCount(int value) => Clamp(value, MinVSyncCount, MaxVSyncCount);
+
+    public static int NormalizeFrameRate(int value) => value <= 0 ? -1 : value;
+
+    public static int NormalizeQueuedFrames(int value) => Clamp(value, MinQueuedFrames, MaxQueuedFrames);
+
+    /// <summary>Materialises a normalised copy; only the write path uses it (low frequency).</summary>
     public static DisplaySettings Normalize(DisplaySettings wanted)
     {
         if (wanted == null) return new DisplaySettings { Enabled = false };
@@ -121,9 +131,9 @@ public static class DisplayPolicy
         return new DisplaySettings
         {
             Enabled = wanted.Enabled,
-            VSyncCount = Clamp(wanted.VSyncCount, MinVSyncCount, MaxVSyncCount),
-            TargetFrameRate = wanted.TargetFrameRate <= 0 ? -1 : wanted.TargetFrameRate,
-            MaxQueuedFrames = Clamp(wanted.MaxQueuedFrames, MinQueuedFrames, MaxQueuedFrames)
+            VSyncCount = NormalizeVSyncCount(wanted.VSyncCount),
+            TargetFrameRate = NormalizeFrameRate(wanted.TargetFrameRate),
+            MaxQueuedFrames = NormalizeQueuedFrames(wanted.MaxQueuedFrames)
         };
     }
 
@@ -131,19 +141,23 @@ public static class DisplayPolicy
     {
         if (wanted == null || !wanted.Enabled) return false;
 
-        DisplaySettings normalized = Normalize(wanted);
-        return actual.VSyncCount != normalized.VSyncCount
-            || actual.TargetFrameRate != normalized.TargetFrameRate
-            || actual.MaxQueuedFrames != normalized.MaxQueuedFrames;
+        return actual.VSyncCount != NormalizeVSyncCount(wanted.VSyncCount)
+            || actual.TargetFrameRate != NormalizeFrameRate(wanted.TargetFrameRate)
+            || actual.MaxQueuedFrames != NormalizeQueuedFrames(wanted.MaxQueuedFrames);
     }
 
     public static string Describe(DisplaySettings wanted, DisplayState actual)
     {
-        DisplaySettings normalized = Normalize(wanted);
+        if (wanted == null) return string.Empty;
+
+        int wantedVSync = NormalizeVSyncCount(wanted.VSyncCount);
+        int wantedFrameRate = NormalizeFrameRate(wanted.TargetFrameRate);
+        int wantedQueued = NormalizeQueuedFrames(wanted.MaxQueuedFrames);
+
         string drift = string.Empty;
-        if (actual.VSyncCount != normalized.VSyncCount) drift += " vSync " + actual.VSyncCount + "->" + normalized.VSyncCount;
-        if (actual.TargetFrameRate != normalized.TargetFrameRate) drift += " fps " + actual.TargetFrameRate + "->" + normalized.TargetFrameRate;
-        if (actual.MaxQueuedFrames != normalized.MaxQueuedFrames) drift += " queue " + actual.MaxQueuedFrames + "->" + normalized.MaxQueuedFrames;
+        if (actual.VSyncCount != wantedVSync) drift += " vSync " + actual.VSyncCount + "->" + wantedVSync;
+        if (actual.TargetFrameRate != wantedFrameRate) drift += " fps " + actual.TargetFrameRate + "->" + wantedFrameRate;
+        if (actual.MaxQueuedFrames != wantedQueued) drift += " queue " + actual.MaxQueuedFrames + "->" + wantedQueued;
         return drift.Trim();
     }
 

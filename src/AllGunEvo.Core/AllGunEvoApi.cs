@@ -9,7 +9,9 @@ namespace AllGunEvo.Core;
 public static class AllGunEvoApi
 {
     public const string PluginGuid = "local.20mtd.allgunevo";
-    public const string Version = "2.0.0";
+
+    /// <summary>Single source of truth for the plugin version (also used by [BepInPlugin]).</summary>
+    public const string Version = "2.1.0";
 
     private static readonly FeatureRegistry registry = new FeatureRegistry();
 
