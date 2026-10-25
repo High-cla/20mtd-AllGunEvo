@@ -1,0 +1,12 @@
+# build output
+bin/
+obj/
+
+# local research: decompiled game sources and throwaway probes (never committed)
+ref/
+probe/
+
+# IDE
+.vs/
+.idea/
+*.user
