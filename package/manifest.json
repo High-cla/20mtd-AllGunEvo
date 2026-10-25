@@ -1,0 +1,7 @@
+{
+  "name": "AllGunEvo",
+  "version_number": "2.2.0",
+  "website_url": "https://github.com/High-cla/20mtd-AllGunEvo",
+  "description": "Start every run with all three gun evolutions of the selected gun, vacuum every XP pickup on the map every 30 seconds, and control frame pacing (soft frame limit at refresh-3, vSync, render queue depth).",
+  "dependencies": []
+}

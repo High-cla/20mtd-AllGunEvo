@@ -10,3 +10,5 @@ probe/
 .vs/
 .idea/
 *.user
+dist/
+*.zip
